@@ -13,7 +13,7 @@ on:
         required: false
         type: string
         default: "1"
-        description: "The patch release of this alpha release"
+        description: "The patch release of this alpha or beta release"
       bump-version:
         required: false
         type: boolean
@@ -128,65 +128,19 @@ jobs:
           # Create the tag
           git tag -a v${version} -m "Release ${version}" || true
 
-      - name: Create or patch beta branch
-        if: ${{ inputs.environment == 'beta' }}
-        run: |
-          set -x
-
-          currentVersion=$(taplo get -f Cargo.toml "package.version")
-
-          if [[ $currentVersion == *"-beta"* ]]; then
-            if [[ "${{ inputs.bump-version }}" == "true" ]]; then
-              major=$(echo $currentVersion | tr "." "\n" | sed -n 1p)
-              minor=$(echo $currentVersion | tr "." "\n" | sed -n 2p)
-              patchAndMeta=$(echo $currentVersion | tr "." "\n" | sed -n 3p)
-              betaNum=$(echo $currentVersion | tr "." "\n" | sed -n 4p)
-              betaVersion=${major}.${minor}.${patchAndMeta}.$(($betaNum + 1))
-            else
-              betaVersion=$currentVersion
-            fi
-
-            # Update dependency versions
-            sed -i "s#surrealdb = { version = \"=${currentVersion}\"#surrealdb = { version = \"=${betaVersion}\"#" Cargo.toml
-            sed -i "s#surrealdb-core2 = { version = \"=2.0.0-${currentVersion}\"#surrealdb-core2 = { version = \"=2.0.0-${betaVersion}\"#" sdk/Cargo.toml
-          else
-            git checkout -b releases/beta
-            major=$(echo $currentVersion | tr "." "\n" | sed -n 1p)
-            minor=$(echo $currentVersion | tr "." "\n" | sed -n 2p)
-            betaVersion=${major}.${minor}.0-beta.1
-
-            # Update dependency versions
-            sed -i "s#surrealdb = { version = \"${major}\"#surrealdb = { version = \"=${betaVersion}\"#" Cargo.toml
-            sed -i "s#surrealdb-core2 = { version = \"=2.0.0-${currentVersion}\"#surrealdb-core2 = { version = \"=2.0.0-${betaVersion}\"#" sdk/Cargo.toml
-          fi
-
-          # Bump the crate version
-          sed -i "s#^version = \".*\"#version = \"${betaVersion}\"#" Cargo.toml
-          sed -i "s#^version = \".*\"#version = \"${betaVersion}\"#" sdk/Cargo.toml
-          sed -i "s#^version = \".*\"#version = \"2.0.0-${betaVersion}\"#" core/Cargo.toml
-
-          # Update Cargo.lock without updating dependency versions
-          cargo check --no-default-features --features storage-mem
-
-          # Commit changes
-          git commit -am "Prepare v${betaVersion} release" || true
-
-          # Create the tag
-          git tag -a v${betaVersion} -m "Release ${betaVersion}" || true
-
-      - name: Create or patch alpha branch
-        if: ${{ inputs.environment == 'alpha' }}
+      - name: Create an alpha or beta tag
+        if: ${{ inputs.environment == 'alpha' || inputs.environment == 'beta' }}
         run: |
           set -x
 
           currentVersion=$(taplo get -f Cargo.toml "package.version")
 
           # Create the tag
-          alphaVersion=${currentVersion}-${{ inputs.environment }}.${{ inputs.patch }}
-          git tag -a v${alphaVersion} -m "Release ${alphaVersion}" || true
+          version=${currentVersion}-${{ inputs.environment }}.${{ inputs.patch }}
+          git tag -a v${version} -m "Release ${version}" || true
 
       - name: Push changes
-        if: ${{ inputs.publish && (inputs.environment == 'beta' || inputs.environment == 'stable') }}
+        if: ${{ inputs.publish && (inputs.environment == 'stable') }}
         run: git push
 
       - name: Push tag
@@ -200,7 +154,7 @@ jobs:
 
           version=$(taplo get -f Cargo.toml "package.version")
 
-          if [[ "${{ inputs.environment }}" == "alpha" ]]; then
+          if [[ "${{ inputs.environment }}" == "alpha" || "${{ inputs.environment }}" == "beta" ]]; then
             version=${version}-${{ inputs.environment }}.${{ inputs.patch }}
           fi
 
@@ -547,8 +501,8 @@ jobs:
           set +e
           go version ; cargo version ; rustc --version ; cmake --version ; gcc --version ; g++ --version ; perl -v
 
-      - name: Patch alpha crate version
-        if: ${{ inputs.environment == 'alpha' }}
+      - name: Patch alpha or beta crate version
+        if: ${{ inputs.environment == 'alpha' || inputs.environment == 'beta' }}
         run: |
           set -x
 
@@ -637,25 +591,8 @@ jobs:
           git_tag_enable = false
           EOF
 
-      - name: Patch beta crate version
-        if: ${{ inputs.environment == 'beta' }}
-        run: |
-          set -x
-
-          # Derive crate version
-          currentVersion=$(taplo get -f Cargo.toml "package.version")
-          major=$(echo $currentVersion | tr "." "\n" | sed -n 1p)
-          minor=$(echo $currentVersion | tr "." "\n" | sed -n 2p)
-          betaNum=$(echo $currentVersion | tr "." "\n" | sed -n 4p)
-          version=${major}.${minor}.$(($betaNum - 1))
-
-          # Update crate version
-          sed -i "s#^version = \".*\"#version = \"${version}\"#" sdk/Cargo.toml
-          sed -i "s#^version = \".*\"#version = \"2.0.0-${version}\"#" core/Cargo.toml
-          sed -i "s#surrealdb-core2 = { version = \"=2.0.0-${currentVersion}\"#surrealdb-core2 = { version = \"=2.0.0-${version}\"#" sdk/Cargo.toml
-
-      - name: Patch alpha crate version
-        if: ${{ inputs.environment == 'alpha' }}
+      - name: Patch alpha or beta crate version
+        if: ${{ inputs.environment == 'alpha' || inputs.environment == 'beta' }}
         run: |
           set -x
 
