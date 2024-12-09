@@ -39,6 +39,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
         with:
+          repository: surrealdb/surrealdb
           ref: ${{ inputs.git-tag }}
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
 
