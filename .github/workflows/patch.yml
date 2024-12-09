@@ -39,9 +39,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
         with:
-          repository: surrealdb/surrealdb
           ref: ${{ inputs.git-tag }}
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
 
       - name: Install a TOML parser
         run: |
@@ -83,4 +81,6 @@ jobs:
           git commit -am "Bump version to v${version}"
 
       - name: Push the new branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
         run: git push
