@@ -1,5 +1,6 @@
+use std::sync::Arc;
 use surrealdb::{engine::any::Any, sql::Id, Surreal};
-use tokio::{runtime::Runtime, task::JoinSet};
+use tokio::{runtime::Runtime, sync::Semaphore, task::JoinSet};
 
 use crate::sdb_benches::sdk::Record;
 
@@ -22,10 +23,15 @@ impl super::Routine for Read {
 		self.runtime.block_on(async {
 			// Spawn one task for each operation
 			let mut tasks = JoinSet::default();
+			// Create one record at a time to avoid transaction conflicts
+			// TODO(rushmore) handle this internally so we don't have to run one write at a time
+			let semaphore = Arc::new(Semaphore::new(1));
 			for task_id in 0..num_ops {
+				let semaphore = semaphore.clone();
 				let table_name = self.table_name.clone();
 
 				tasks.spawn(async move {
+					let permit = semaphore.acquire().await.unwrap();
 					let _: Option<Record> = client
 						.create((table_name, task_id as i64))
 						.content(Record {
@@ -34,6 +40,7 @@ impl super::Routine for Read {
 						.await
 						.expect("[setup] create record failed")
 						.expect("[setup] the create operation returned None");
+					drop(permit);
 				});
 			}
 
